@@ -222,11 +222,17 @@ const HEALTH_TIMEOUT_MS = 15_000
 
 export async function checkProxyHealth(
   port: string | number,
-  log: LogFn | undefined
+  log: LogFn | undefined,
+  /**
+   * Aborted when the proxy is shut down on purpose. A check cut short that way
+   * says nothing about the proxy's health, so it ends without logging.
+   */
+  cancel?: AbortSignal
 ): Promise<HealthResult> {
+  const timeout = AbortSignal.timeout(HEALTH_TIMEOUT_MS)
   try {
     const res = await fetch(getProxyBaseURL(port) + "/health", {
-      signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+      signal: cancel ? AbortSignal.any([timeout, cancel]) : timeout,
     })
     const body = await res.json() as Record<string, unknown>
     // Meridian answers with the literal string "unknown" when it has no
@@ -273,6 +279,9 @@ export async function checkProxyHealth(
     void log?.( "error", `[claude-max] ${detail}`)
     return { ok: false, message: detail, version, ...renewal }
   } catch (err) {
+    if (cancel?.aborted) {
+      return { ok: false, message: "Health check cancelled: proxy closed" }
+    }
     const msg =
       err instanceof Error ? err.message : String(err)
     void log?.( "error", `[claude-max] Health check failed: ${msg}`)

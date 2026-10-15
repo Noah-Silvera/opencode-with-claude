@@ -23,7 +23,7 @@ async function freshImport() {
   return await import(`../../src/proxy.ts?t=${Date.now()}${Math.random()}`)
 }
 
-async function withStubHealth({ payload, status = 200, delayMs = 0 }, assertions) {
+async function withStubHealth({ payload, status = 200, delayMs = 0, cancel }, assertions) {
   const server = createServer((req, res) => {
     if (!req.url?.startsWith("/health")) {
       res.writeHead(404).end()
@@ -52,7 +52,7 @@ async function withStubHealth({ payload, status = 200, delayMs = 0 }, assertions
     const { checkProxyHealth } = await freshImport()
     const result = await checkProxyHealth(server.address().port, async (level, message) => {
       logs.push({ level, message })
-    })
+    }, cancel)
     await assertions({ result, logs })
   } finally {
     for (const [k, v] of Object.entries(prev)) {
@@ -241,6 +241,37 @@ test("a slow cold /health is still read as healthy", async () => {
       "a slow but healthy proxy must not be reported as failed",
     )
   })
+})
+
+// #232: the plugin closes its proxy when the last OpenCode reference goes
+// away, which force-ends the startup /health still in flight. That cut-off is
+// our own shutdown, not a fault, and must not surface as "Health check failed".
+test("a check cancelled by a deliberate shutdown logs nothing", async () => {
+  const cancel = new AbortController()
+  setTimeout(() => cancel.abort(), 50).unref()
+  await withStubHealth(
+    { payload: healthy(), delayMs: 2_000, cancel: cancel.signal },
+    ({ result, logs }) => {
+      assert.equal(result.ok, false)
+      assert.match(result.message, /cancelled/)
+      assert.deepEqual(logs, [])
+    },
+  )
+})
+
+test("an uncancelled check still reports a failed request", async () => {
+  const { checkProxyHealth } = await freshImport()
+  const server = createServer()
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const { port } = server.address()
+  await new Promise((resolve) => server.close(resolve))
+
+  const logs = []
+  const result = await checkProxyHealth(port, async (level, message) => {
+    logs.push({ level, message })
+  }, new AbortController().signal)
+  assert.equal(result.ok, false)
+  assert.ok(findLog(logs, "error", "Health check failed"))
 })
 
 test("resolveMeridianVersion: reports the installed package's version", async () => {

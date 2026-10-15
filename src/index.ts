@@ -96,17 +96,21 @@ async function startRuntime(log: LogFn): Promise<Runtime> {
   void log("info", `proxy ready at ${baseURL}`)
 
   const unregisterCleanup = registerCleanup(proxy)
+  const healthCheck = new AbortController()
   const close = proxy.close
   let closing: Promise<void> | undefined
   proxy.close = () => {
     unregisterCleanup()
+    // Closing force-ends open sockets, including a /health still in flight.
+    // Cancel it first so a deliberate shutdown is not logged as a failure.
+    healthCheck.abort()
     return closing ??= close()
   }
 
   // Deliberately not awaited: this only produces log lines, and /health can
   // take seconds when Meridian's auth cache is cold. Blocking OpenCode's
   // startup on it would trade real latency for a diagnostic.
-  void checkProxyHealth(proxy.port, log)
+  void checkProxyHealth(proxy.port, log, healthCheck.signal)
 
   return { proxy, baseURL }
 }

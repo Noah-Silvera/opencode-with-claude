@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.2](https://github.com/ianjwhite99/opencode-with-claude/compare/v1.11.1...v1.11.2) (2026-10-15)
+
+
+### Bug Fixes
+
+* adapt V2 system updates for Meridian resumes ([#236](https://github.com/ianjwhite99/opencode-with-claude/issues/236)) ([b223acf](https://github.com/ianjwhite99/opencode-with-claude/commit/b223acf415833fa7e5827c6822ab92552764b482))
+* don't report a deliberate proxy shutdown as a failed health check ([#239](https://github.com/ianjwhite99/opencode-with-claude/issues/239)) ([7e0901a](https://github.com/ianjwhite99/opencode-with-claude/commit/7e0901a93a9900f1b77ff6646cae8ad864dfe004))
+
 ## [1.11.1](https://github.com/ianjwhite99/opencode-with-claude/compare/v1.11.0...v1.11.1) (2026-09-30)
 
 
